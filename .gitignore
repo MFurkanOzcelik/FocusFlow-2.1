@@ -1,0 +1,11 @@
+# Kişisel Veri Dosyaları (Bunları yükleme)
+agenda_data.json
+notes_data.json
+categories.json
+config.json
+
+# Python Gereksiz Dosyaları
+__pycache__/
+*.pyc
+.DS_Store
+.env
