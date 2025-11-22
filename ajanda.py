@@ -5,7 +5,6 @@ import math
 from datetime import datetime, timedelta
 from tkinter import messagebox
 import tkinter as tk
-import ctypes # Görev çubuğu ikonu için
 
 try:
     import customtkinter as ctk
@@ -82,7 +81,10 @@ TRANSLATIONS = {
         "add_cat_title": "Kategori Ekle",
         "add_cat_prompt": "Yeni kategori ismi:",
         "months": ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
-        "days": ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
+        "days": ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"],
+        "tasks_on": "Görevler",
+        "select_day": "Bir gün seçin",
+        "no_notes": "Not yok"
     },
     "EN": {
         "app_name": "FocusFlow 2.1",
@@ -128,54 +130,17 @@ TRANSLATIONS = {
         "add_cat_title": "Add Category",
         "add_cat_prompt": "New category name:",
         "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-        "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "tasks_on": "Tasks on",
+        "select_day": "Select a day",
+        "no_notes": "No notes"
     }
 }
-
-# --- TOOLTIP CLASS ---
-class ToolTip:
-    def __init__(self, widget, text):
-        self.widget = widget
-        self.text = text
-        self.tooltip_window = None
-        self.widget.bind("<Enter>", self.show_tip)
-        self.widget.bind("<Leave>", self.hide_tip)
-        self.widget.bind("<Button-1>", self.hide_tip)
-
-    def show_tip(self, event=None):
-        if self.tooltip_window or not self.text: return
-        x = self.widget.winfo_rootx() + 25
-        y = self.widget.winfo_rooty() + 25
-        self.tooltip_window = ctk.CTkToplevel(self.widget)
-        self.tooltip_window.wm_overrideredirect(True)
-        self.tooltip_window.wm_geometry(f"+{x}+{y}")
-        self.tooltip_window.attributes('-topmost', True)
-        frame = ctk.CTkFrame(self.tooltip_window, fg_color="#1e1e1e", corner_radius=8, border_width=0)
-        frame.pack()
-        ctk.CTkLabel(frame, text=self.text, text_color="#ffffff", padx=12, pady=8, font=("Arial", 11), justify="left").pack()
-
-    def hide_tip(self, event=None):
-        if self.tooltip_window:
-            self.tooltip_window.destroy()
-            self.tooltip_window = None
 
 class PersonalAssistantApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        # Görev Çubuğu İkonu Düzeltme
-        myappid = 'mycompany.focusflow.version.2.1'
-        try:
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
-        except:
-            pass
-        
-        # İkon Yükleme
-        try:
-            self.iconbitmap("logo.ico")
-        except:
-            pass # Logo yoksa devam et
-
         self.config = self.load_config()
         self.current_lang_code = self.config.get("language", "TR")
         self.current_theme_name = self.config.get("theme", "Midnight")
@@ -194,6 +159,7 @@ class PersonalAssistantApp(ctk.CTk):
         self.selected_date = datetime.now().strftime("%Y-%m-%d")
         self.calendar_date = datetime.now()
         self.heatmap_date = datetime.now()
+        self.heatmap_selected_date = None
         
         # Timer Değişkenleri
         self.timer_running = False
@@ -222,12 +188,12 @@ class PersonalAssistantApp(ctk.CTk):
         self.main_area.pack(side="right", fill="both", expand=True)
 
         # Logo/Başlık
-        logo_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        logo_frame = ctk.CTkFrame(self.sidebar, fg_color=self.theme["sidebar"])
         logo_frame.pack(pady=(50, 60))
         
-        ctk.CTkLabel(logo_frame, text=self.t("app_name"), font=("Arial", 26, "bold"), 
+        ctk.CTkLabel(logo_frame, text=self.t("app_name"), font=("SF Pro Display", 26, "bold"), 
                      text_color=self.theme["accent"]).pack()
-        ctk.CTkLabel(logo_frame, text="━━━━━━━━", font=("Arial", 8), 
+        ctk.CTkLabel(logo_frame, text="━━━━━━━━", font=("SF Pro Display", 8), 
                      text_color=self.theme["accent"]).pack()
         
         self.btn_agenda = self.create_menu_btn(self.t("agenda"), self.show_agenda)
@@ -236,16 +202,16 @@ class PersonalAssistantApp(ctk.CTk):
         self.btn_stats = self.create_menu_btn(self.t("stats"), self.show_stats)
         self.btn_total = self.create_menu_btn(self.t("total_time"), self.show_total_time)
         
-        self.top_bar = ctk.CTkFrame(self.main_area, height=60, fg_color="transparent")
+        self.top_bar = ctk.CTkFrame(self.main_area, height=60, fg_color=self.theme["bg"])
         self.top_bar.pack(fill="x", padx=30, pady=(20, 0))
         
         settings_btn = ctk.CTkButton(self.top_bar, text="⚙", width=44, height=44,
                                      fg_color=self.theme["card"], hover_color=self.theme["accent"],
-                                     text_color=self.theme["text_dim"], font=("Arial", 22),
+                                     text_color=self.theme["text_dim"], font=("SF Pro Display", 22),
                                      corner_radius=22, border_width=0, command=self.open_settings)
         settings_btn.pack(side="right")
 
-        self.view_frame = ctk.CTkFrame(self.main_area, fg_color="transparent")
+        self.view_frame = ctk.CTkFrame(self.main_area, fg_color=self.theme["bg"])
         self.view_frame.pack(fill="both", expand=True, padx=30, pady=20)
 
         self.reset_active_states()
@@ -253,19 +219,19 @@ class PersonalAssistantApp(ctk.CTk):
 
     def create_menu_btn(self, text, command):
         btn = ctk.CTkButton(self.sidebar, text=text, anchor="w", height=52,
-                            fg_color="transparent", hover_color=self.theme["card"],
-                            text_color=self.theme["text_dim"], font=("Arial", 15, "normal"),
+                            fg_color=self.theme["sidebar"], hover_color=self.theme["card"],
+                            text_color=self.theme["text_dim"], font=("Inter", 15, "normal"),
                             command=command, border_spacing=15)
         btn.pack(fill="x", padx=15, pady=4)
         return btn
 
     def set_active_menu(self, active_btn):
-        self.btn_agenda.configure(fg_color="transparent", text_color=self.theme["text_dim"], font=("Arial", 15, "normal"))
-        self.btn_notes.configure(fg_color="transparent", text_color=self.theme["text_dim"], font=("Arial", 15, "normal"))
-        self.btn_stats.configure(fg_color="transparent", text_color=self.theme["text_dim"], font=("Arial", 15, "normal"))
-        self.btn_timer.configure(fg_color="transparent", text_color=self.theme["text_dim"], font=("Arial", 15, "normal"))
-        self.btn_total.configure(fg_color="transparent", text_color=self.theme["text_dim"], font=("Arial", 15, "normal"))
-        active_btn.configure(fg_color=self.theme["card"], text_color=self.theme["accent"], font=("Arial", 15, "bold"))
+        self.btn_agenda.configure(fg_color=self.theme["sidebar"], text_color=self.theme["text_dim"], font=("Inter", 15, "normal"))
+        self.btn_notes.configure(fg_color=self.theme["sidebar"], text_color=self.theme["text_dim"], font=("Inter", 15, "normal"))
+        self.btn_stats.configure(fg_color=self.theme["sidebar"], text_color=self.theme["text_dim"], font=("Inter", 15, "normal"))
+        self.btn_timer.configure(fg_color=self.theme["sidebar"], text_color=self.theme["text_dim"], font=("Inter", 15, "normal"))
+        self.btn_total.configure(fg_color=self.theme["sidebar"], text_color=self.theme["text_dim"], font=("Inter", 15, "normal"))
+        active_btn.configure(fg_color=self.theme["card"], text_color=self.theme["accent"], font=("Inter", 15, "bold"))
 
     def reset_active_states(self):
         self.agenda_active = False 
@@ -286,50 +252,52 @@ class PersonalAssistantApp(ctk.CTk):
         self.set_active_menu(self.btn_agenda)
         self.clear_view()
         
-        split = ctk.CTkFrame(self.view_frame, fg_color="transparent")
+        split = ctk.CTkFrame(self.view_frame, fg_color=self.theme["bg"])
         split.pack(fill="both", expand=True)
         
-        left_panel = ctk.CTkFrame(split, width=380, fg_color=self.theme["card"], corner_radius=16)
-        left_panel.pack(side="left", fill="y", padx=(0, 20))
+        left_panel = ctk.CTkFrame(split, width=400, fg_color=self.theme["card"], corner_radius=16)
+        left_panel.pack(side="left", fill="both", padx=(0, 20))
         left_panel.pack_propagate(False)
         
-        cal_header = ctk.CTkFrame(left_panel, fg_color="transparent")
-        cal_header.pack(fill="x", padx=25, pady=(30, 20))
+        cal_header = ctk.CTkFrame(left_panel, fg_color=self.theme["card"])
+        cal_header.pack(fill="x", padx=25, pady=(25, 20))
         
-        ctk.CTkButton(cal_header, text="‹", width=36, height=36, fg_color="transparent", 
-                     text_color=self.theme["text"], hover_color=self.theme["bg"],
-                     font=("Arial", 20), border_width=0,
+        ctk.CTkButton(cal_header, text="‹", width=40, height=40, fg_color=self.theme["bg"], 
+                     text_color=self.theme["text"], hover_color=self.theme["accent"],
+                     font=("SF Pro Display", 24), border_width=0, corner_radius=20,
                      command=lambda: self.change_month(-1)).pack(side="left")
         
-        self.month_label = ctk.CTkLabel(cal_header, text="", font=("Arial", 18, "bold"), text_color=self.theme["text"])
+        self.month_label = ctk.CTkLabel(cal_header, text="", font=("SF Pro Display", 20, "bold"), 
+                                       text_color=self.theme["text"])
         self.month_label.pack(side="left", expand=True)
         
-        ctk.CTkButton(cal_header, text="›", width=36, height=36, fg_color="transparent", 
-                     text_color=self.theme["text"], hover_color=self.theme["bg"],
-                     font=("Arial", 20), border_width=0,
+        ctk.CTkButton(cal_header, text="›", width=40, height=40, fg_color=self.theme["bg"], 
+                     text_color=self.theme["text"], hover_color=self.theme["accent"],
+                     font=("SF Pro Display", 24), border_width=0, corner_radius=20,
                      command=lambda: self.change_month(1)).pack(side="right")
         
-        self.cal_grid_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
-        self.cal_grid_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        self.cal_grid_frame = ctk.CTkFrame(left_panel, fg_color=self.theme["card"])
+        self.cal_grid_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
-        right_panel = ctk.CTkFrame(split, fg_color="transparent")
+        right_panel = ctk.CTkFrame(split, fg_color=self.theme["bg"])
         right_panel.pack(side="right", fill="both", expand=True)
         
-        self.date_label = ctk.CTkLabel(right_panel, text="", font=("Arial", 24, "bold"), text_color=self.theme["text"])
+        self.date_label = ctk.CTkLabel(right_panel, text="", font=("SF Pro Display", 24, "bold"), 
+                                      text_color=self.theme["text"])
         self.date_label.pack(anchor="w", pady=(0, 20))
         
-        input_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
+        input_frame = ctk.CTkFrame(right_panel, fg_color=self.theme["bg"])
         input_frame.pack(fill="x", pady=(0, 20))
         
         self.task_entry = ctk.CTkEntry(input_frame, placeholder_text=self.t("new_task"), height=50,
                                       fg_color=self.theme["card"], border_width=0, text_color=self.theme["text"],
-                                      font=("Arial", 14), corner_radius=12)
+                                      font=("Inter", 14), corner_radius=12)
         self.task_entry.pack(side="left", fill="x", expand=True, padx=(0, 12))
         self.task_entry.bind("<Return>", lambda e: self.add_task())
         
         ctk.CTkButton(input_frame, text="+", width=50, height=50,
                      fg_color=self.theme["accent"], hover_color=self.theme["accent"],
-                     text_color=self.theme["bg"], corner_radius=25, font=("Arial", 24, "bold"),
+                     text_color=self.theme["bg"], corner_radius=25, font=("SF Pro Display", 24, "bold"),
                      border_width=0, command=self.add_task).pack(side="right")
         
         self.task_list_frame = ctk.CTkScrollableFrame(right_panel, fg_color=self.theme["card"], corner_radius=16)
@@ -340,49 +308,74 @@ class PersonalAssistantApp(ctk.CTk):
         self.update_date_labels()
 
     def render_calendar_grid(self):
-        for w in self.cal_grid_frame.winfo_children(): w.destroy()
-        
+        for w in self.cal_grid_frame.winfo_children(): 
+            w.destroy()
+            
         months_list = self.t("months")
         self.month_label.configure(text=f"{months_list[self.calendar_date.month-1]} {self.calendar_date.year}")
         
         days_list = self.t("days")
         
-        for i, d in enumerate(days_list):
-            self.cal_grid_frame.columnconfigure(i, weight=1, uniform="day_col")
-            ctk.CTkLabel(self.cal_grid_frame, text=d, text_color=self.theme["text_dim"], 
-                         font=("Arial", 11, "bold")).grid(row=0, column=i, pady=(0, 10))
+        for i in range(7):
+            self.cal_grid_frame.columnconfigure(i, weight=1, uniform="cal")
         
-        self.cal_grid_frame.rowconfigure(0, weight=0)
-
+        for i, d in enumerate(days_list):
+            ctk.CTkLabel(self.cal_grid_frame, text=d, text_color=self.theme["text_dim"], 
+                        font=("Inter", 12, "bold")).grid(row=0, column=i, pady=(0, 12), sticky="ew")
+        
         month_days = calendar.monthcalendar(self.calendar_date.year, self.calendar_date.month)
         
+        for r in range(len(month_days)):
+            self.cal_grid_frame.rowconfigure(r+1, weight=1, uniform="cal_row")
+        
         for r, week in enumerate(month_days):
-            self.cal_grid_frame.rowconfigure(r+1, weight=1, uniform="week_row")
-            
             for c, day in enumerate(week):
-                if day != 0:  
+                if day != 0:
                     date_str = f"{self.calendar_date.year}-{self.calendar_date.month:02d}-{day:02d}"
                     is_sel = (date_str == self.selected_date)
                     has_task = any(t["date"] == date_str for t in self.tasks)
                     
+                    today = datetime.now().strftime("%Y-%m-%d")
+                    is_today = (date_str == today)
+                    
                     if is_sel:
                         bg = self.theme["accent"]
                         fg = self.theme["bg"]
-                        font_style = ("Arial", 13, "bold")
+                        font_style = ("SF Pro Display", 15, "bold")
+                        border_color = self.theme["accent"]
+                        border_width = 0
+                    elif is_today:
+                        bg = self.theme["card"]
+                        fg = self.theme["accent"]
+                        font_style = ("SF Pro Display", 15, "bold")
+                        border_color = self.theme["accent"]
+                        border_width = 2
                     elif has_task:
                         bg = self.theme["bg"]
                         fg = self.theme["text"]
-                        font_style = ("Arial", 13, "normal")
+                        font_style = ("SF Pro Display", 15, "normal")
+                        border_color = self.theme["bg"]
+                        border_width = 0
                     else:
-                        bg = "transparent"
+                        bg = self.theme["card"]
                         fg = self.theme["text_dim"]
-                        font_style = ("Arial", 13, "normal")
+                        font_style = ("SF Pro Display", 15, "normal")
+                        border_color = self.theme["card"]
+                        border_width = 0
                     
-                    btn = ctk.CTkButton(self.cal_grid_frame, text=str(day), width=0, height=0, fg_color=bg,
-                                      text_color=fg, hover_color=self.theme["accent"], corner_radius=19,
-                                      font=font_style, border_width=0,
+                    btn = ctk.CTkButton(self.cal_grid_frame, text=str(day), 
+                                      fg_color=bg,
+                                      text_color=fg, 
+                                      hover_color=self.theme["accent"], 
+                                      corner_radius=12,
+                                      font=font_style, 
+                                      border_width=border_width,
+                                      border_color=border_color,
                                       command=lambda d=date_str: self.select_date(d))
-                    btn.grid(row=r+1, column=c, padx=3, pady=3, sticky="nsew")
+                    btn.grid(row=r+1, column=c, padx=4, pady=4, sticky="nsew")
+                else:
+                    empty_label = ctk.CTkLabel(self.cal_grid_frame, text="", fg_color=self.theme["card"])
+                    empty_label.grid(row=r+1, column=c, sticky="nsew")
 
     def change_month(self, d):
         m, y = self.calendar_date.month + d, self.calendar_date.year
@@ -404,28 +397,74 @@ class PersonalAssistantApp(ctk.CTk):
         except: pass
 
     def refresh_task_list(self):
-        for w in self.task_list_frame.winfo_children(): w.destroy()
+        for w in self.task_list_frame.winfo_children(): 
+            w.destroy()
+        
         tasks = [t for t in self.tasks if t["date"] == self.selected_date]
+        
         if not tasks:
-            ctk.CTkLabel(self.task_list_frame, text=self.t("no_task"), text_color=self.theme["text_dim"], 
-                         font=("Arial", 14)).pack(pady=40)
+            empty_container = ctk.CTkFrame(self.task_list_frame, fg_color=self.theme["card"])
+            empty_container.pack(expand=True)
+            
+            ctk.CTkLabel(empty_container, text="📋", font=("SF Pro Display", 40)).pack(pady=(0, 10))
+            ctk.CTkLabel(empty_container, text=self.t("no_task"), 
+                        text_color=self.theme["text_dim"], 
+                        font=("Inter", 13)).pack()
             return
+        
         for task in tasks:
-            f = ctk.CTkFrame(self.task_list_frame, fg_color="transparent")
-            f.pack(fill="x", pady=6, padx=8)
+            task_card = ctk.CTkFrame(self.task_list_frame, 
+                                    fg_color=self.theme["bg"], 
+                                    corner_radius=10,
+                                    border_width=1,
+                                    border_color=self.theme["sidebar"])
+            task_card.pack(fill="x", pady=5, padx=5)
+            
+            content_frame = ctk.CTkFrame(task_card, fg_color=self.theme["bg"])
+            content_frame.pack(fill="x", padx=12, pady=10)
+            
             done = task["done"]
-            chk = ctk.CTkButton(f, text="✓" if done else "", width=28, height=28, corner_radius=14,
-                               fg_color=self.theme["accent"] if done else "transparent", border_width=2,
-                               border_color=self.theme["accent"], text_color=self.theme["bg"],
-                               font=("Arial", 14, "bold"),
+            
+            checkbox_size = 20
+            checkbox_bg = self.theme["accent"] if done else self.theme["card"]
+            checkbox_border = self.theme["accent"]
+            
+            chk = ctk.CTkButton(content_frame, 
+                               text="✓" if done else "", 
+                               width=checkbox_size, 
+                               height=checkbox_size, 
+                               corner_radius=checkbox_size // 2,
+                               fg_color=checkbox_bg,
+                               hover_color=self.theme["accent"],
+                               border_width=1.5,
+                               border_color=checkbox_border, 
+                               text_color=self.theme["bg"] if done else self.theme["accent"],
+                               font=("SF Pro Display", 11, "bold"),
                                command=lambda t=task: self.toggle_task(t))
             chk.pack(side="left", padx=(0, 12))
-            lbl = ctk.CTkLabel(f, text=task["task"], text_color=self.theme["text_dim"] if done else self.theme["text"],
-                              font=("Arial", 14))
-            lbl.pack(side="left", padx=0, fill="x", expand=True)
-            ctk.CTkButton(f, text="✕", width=32, height=32, fg_color="transparent", hover_color=self.theme["danger"],
-                         text_color=self.theme["text_dim"], font=("Arial", 16),
-                         command=lambda t=task: self.delete_task(t)).pack(side="right")
+            
+            text_color = self.theme["text_dim"] if done else self.theme["text"]
+            font_style = ("Inter", 13, "normal")
+            
+            lbl = ctk.CTkLabel(content_frame, 
+                              text=task["task"], 
+                              text_color=text_color,
+                              font=font_style,
+                              anchor="w")
+            lbl.pack(side="left", fill="x", expand=True)
+            
+            del_btn = ctk.CTkButton(content_frame, 
+                                   text="✕", 
+                                   width=24, 
+                                   height=24,
+                                   corner_radius=12,
+                                   fg_color=self.theme["bg"],
+                                   hover_color=self.theme["danger"],
+                                   text_color=self.theme["text_dim"],
+                                   font=("SF Pro Display", 14),
+                                   border_width=0,
+                                   command=lambda t=task: self.delete_task(t))
+            del_btn.pack(side="right")
 
     def add_task(self):
         txt = self.task_entry.get().strip()
@@ -455,19 +494,26 @@ class PersonalAssistantApp(ctk.CTk):
         self.set_active_menu(self.btn_notes)
         self.clear_view()
         
-        split = ctk.CTkFrame(self.view_frame, fg_color="transparent")
+        split = ctk.CTkFrame(self.view_frame, fg_color=self.theme["bg"])
         split.pack(fill="both", expand=True)
         
-        list_panel = ctk.CTkFrame(split, width=280, fg_color=self.theme["card"], corner_radius=16)
+        list_panel = ctk.CTkFrame(split, width=300, fg_color=self.theme["card"], corner_radius=16)
         list_panel.pack(side="left", fill="y", padx=(0, 20))
         list_panel.pack_propagate(False)
         
-        ctk.CTkButton(list_panel, text=self.t("new_note"), fg_color=self.theme["accent"], text_color=self.theme["bg"],
-                      font=("Arial", 14, "bold"), height=48, corner_radius=12, border_width=0,
-                      command=self.create_new_note).pack(fill="x", padx=20, pady=20)
+        # Yeni not butonu
+        ctk.CTkButton(list_panel, text=self.t("new_note"), 
+                     fg_color=self.theme["accent"], 
+                     text_color=self.theme["bg"],
+                     font=("Inter", 14, "bold"), 
+                     height=48, 
+                     corner_radius=12, 
+                     border_width=0,
+                     hover_color=self.theme["accent"],
+                     command=self.create_new_note).pack(fill="x", padx=15, pady=15)
         
-        self.note_list_frame = ctk.CTkScrollableFrame(list_panel, fg_color="transparent")
-        self.note_list_frame.pack(fill="both", expand=True, padx=8)
+        self.note_list_frame = ctk.CTkScrollableFrame(list_panel, fg_color=self.theme["card"])
+        self.note_list_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
         self.editor_panel = ctk.CTkFrame(split, fg_color=self.theme["card"], corner_radius=16)
         self.editor_panel.pack(side="right", fill="both", expand=True)
@@ -477,18 +523,54 @@ class PersonalAssistantApp(ctk.CTk):
 
     def show_empty_editor(self):
         for w in self.editor_panel.winfo_children(): w.destroy()
-        ctk.CTkLabel(self.editor_panel, text=self.t("select_note"), 
-                     text_color=self.theme["text_dim"], font=("Arial", 15)).pack(expand=True)
+        
+        empty_container = ctk.CTkFrame(self.editor_panel, fg_color=self.theme["card"])
+        empty_container.pack(expand=True)
+        
+        ctk.CTkLabel(empty_container, text="📝", font=("SF Pro Display", 48)).pack(pady=(0, 10))
+        ctk.CTkLabel(empty_container, text=self.t("select_note"), 
+                     text_color=self.theme["text_dim"], 
+                     font=("Inter", 14)).pack()
 
     def refresh_note_list(self):
-        for w in self.note_list_frame.winfo_children(): w.destroy()
+        for w in self.note_list_frame.winfo_children(): 
+            w.destroy()
+        
+        if not self.notes:
+            # Boş durum placeholder
+            empty_frame = ctk.CTkFrame(self.note_list_frame, fg_color=self.theme["card"])
+            empty_frame.pack(expand=True, pady=40)
+            
+            ctk.CTkLabel(empty_frame, text="📄", font=("SF Pro Display", 32)).pack(pady=(0, 8))
+            ctk.CTkLabel(empty_frame, text=self.t("no_notes"), 
+                        text_color=self.theme["text_dim"],
+                        font=("Inter", 12)).pack()
+            return
+        
         for i, note in enumerate(reversed(self.notes)):
             idx = len(self.notes) - 1 - i
-            btn = ctk.CTkButton(self.note_list_frame, text=note.get("title", "Başlıksız"), anchor="w",
-                                fg_color="transparent", hover_color=self.theme["bg"], text_color=self.theme["text"],
-                                font=("Arial", 14), height=44, corner_radius=10,
-                                command=lambda x=idx: self.load_note_editor(x))
-            btn.pack(fill="x", pady=3, padx=4)
+            
+            # Modern note card
+            note_card = ctk.CTkFrame(self.note_list_frame,
+                                    fg_color=self.theme["bg"],
+                                    corner_radius=8,
+                                    border_width=1,
+                                    border_color=self.theme["sidebar"])
+            note_card.pack(fill="x", pady=4, padx=2)
+            
+            # Tıklanabilir buton
+            note_btn = ctk.CTkButton(note_card,
+                                    text=note.get("title", "Başlıksız")[:30] + ("..." if len(note.get("title", "")) > 30 else ""),
+                                    anchor="w",
+                                    fg_color=self.theme["bg"],
+                                    hover_color=self.theme["card"],
+                                    text_color=self.theme["text"],
+                                    font=("Inter", 13),
+                                    height=40,
+                                    corner_radius=8,
+                                    border_width=0,
+                                    command=lambda x=idx: self.load_note_editor(x))
+            note_btn.pack(fill="x", padx=8, pady=6)
 
     def create_new_note(self):
         self.load_note_editor(None)
@@ -498,27 +580,27 @@ class PersonalAssistantApp(ctk.CTk):
         current_note = self.notes[index] if index is not None else {"title": "", "content": ""}
         
         title_entry = ctk.CTkEntry(self.editor_panel, placeholder_text=self.t("note_title"), 
-                                  font=("Arial", 22, "bold"), fg_color=self.theme["bg"],
+                                  font=("SF Pro Display", 22, "bold"), fg_color=self.theme["bg"],
                                   text_color=self.theme["text"], border_width=0, height=60, corner_radius=12)
         title_entry.pack(fill="x", padx=25, pady=(25, 15))
         title_entry.insert(0, current_note["title"])
         
         content_txt = ctk.CTkTextbox(self.editor_panel, fg_color=self.theme["bg"], text_color=self.theme["text"], 
-                                    font=("Arial", 14), corner_radius=12, border_width=0)
+                                    font=("Inter", 14), corner_radius=12, border_width=0)
         content_txt.pack(fill="both", expand=True, padx=25, pady=(0, 20))
         content_txt.insert("0.0", current_note["content"])
         
-        btn_frame = ctk.CTkFrame(self.editor_panel, fg_color="transparent")
+        btn_frame = ctk.CTkFrame(self.editor_panel, fg_color=self.theme["card"])
         btn_frame.pack(fill="x", padx=25, pady=(0, 25))
         
         if index is not None:
             ctk.CTkButton(btn_frame, text=self.t("delete"), fg_color=self.theme["danger"], width=100, height=44,
-                          font=("Arial", 14, "bold"), corner_radius=12, border_width=0,
-                          command=lambda: self.delete_note(index)).pack(side="left")
+                         font=("Inter", 14, "bold"), corner_radius=12, border_width=0,
+                         command=lambda: self.delete_note(index)).pack(side="left")
         
         ctk.CTkButton(btn_frame, text=self.t("save"), fg_color=self.theme["accent"], text_color=self.theme["bg"], 
-                      width=120, height=44, font=("Arial", 14, "bold"), corner_radius=12, border_width=0,
-                      command=lambda: self.save_note(index, title_entry.get(), content_txt.get("0.0", "end-1c"))).pack(side="right")
+                     width=120, height=44, font=("Inter", 14, "bold"), corner_radius=12, border_width=0,
+                     command=lambda: self.save_note(index, title_entry.get(), content_txt.get("0.0", "end-1c"))).pack(side="right")
 
     def save_note(self, index, title, content):
         if not title.strip(): return
@@ -537,6 +619,7 @@ class PersonalAssistantApp(ctk.CTk):
             del self.notes[index]
             self.save_data("notes_data.json", self.notes)
             self.show_notes()
+            self.refresh_note_list()
 
     # --- SAYAÇ (TIMER) ---
     def show_timer(self):
@@ -546,62 +629,61 @@ class PersonalAssistantApp(ctk.CTk):
         self.set_active_menu(self.btn_timer)
         self.clear_view()
         
-        container = ctk.CTkFrame(self.view_frame, fg_color="transparent")
+        container = ctk.CTkFrame(self.view_frame, fg_color=self.theme["bg"])
         container.pack(fill="both", expand=True)
         container.place(relx=0.5, rely=0.5, anchor="center")
         
         self.timer_label = ctk.CTkLabel(container, text=self.format_timer_time(self.timer_seconds), 
-                                        font=("Arial", 92, "bold"), text_color=self.theme["accent"])
+                                       font=("SF Pro Display", 92, "bold"), text_color=self.theme["accent"])
         self.timer_label.pack(pady=(0, 40))
         
-        # GÖREV & KATEGORİ GİRİŞİ
-        input_frame = ctk.CTkFrame(container, fg_color="transparent")
+        input_frame = ctk.CTkFrame(container, fg_color=self.theme["bg"])
         input_frame.pack(pady=(0, 40))
         
         self.category_var = ctk.StringVar(value=self.categories[0] if self.categories else "Genel")
         self.cat_menu = ctk.CTkComboBox(input_frame, values=self.categories, variable=self.category_var,
-                                        width=140, height=48, fg_color=self.theme["card"], 
-                                        text_color=self.theme["text"], border_width=0, corner_radius=12,
-                                        font=("Arial", 14), dropdown_font=("Arial", 13))
+                                       width=140, height=48, fg_color=self.theme["card"], 
+                                       text_color=self.theme["text"], border_width=0, corner_radius=12,
+                                       font=("Inter", 14), dropdown_font=("Inter", 13))
         self.cat_menu.pack(side="left", padx=(0, 8))
         
         ctk.CTkButton(input_frame, text="+", width=48, height=48, fg_color=self.theme["card"], 
-                      text_color=self.theme["accent"], font=("Arial", 20), corner_radius=12,
-                      command=self.add_category_dialog).pack(side="left", padx=(0, 12))
+                     text_color=self.theme["accent"], font=("SF Pro Display", 20), corner_radius=12,
+                     command=self.add_category_dialog).pack(side="left", padx=(0, 12))
         
         self.timer_entry = ctk.CTkEntry(input_frame, placeholder_text=self.t("timer_task_hint"),
-                                        width=280, height=48, font=("Arial", 14),
-                                        fg_color=self.theme["card"], text_color=self.theme["text"], 
-                                        border_width=0, corner_radius=12)
+                                       width=280, height=48, font=("Inter", 14),
+                                       fg_color=self.theme["card"], text_color=self.theme["text"], 
+                                       border_width=0, corner_radius=12)
         self.timer_entry.pack(side="left")
         
-        btn_frame = ctk.CTkFrame(container, fg_color="transparent")
+        btn_frame = ctk.CTkFrame(container, fg_color=self.theme["bg"])
         btn_frame.pack()
         
         ctk.CTkButton(btn_frame, text=self.t("start"), width=110, height=48,
-                      fg_color=self.theme["accent"], text_color=self.theme["bg"], corner_radius=24,
-                      font=("Arial", 14, "bold"), border_width=0,
-                      command=self.start_timer).pack(side="left", padx=8)
+                     fg_color=self.theme["accent"], text_color=self.theme["bg"], corner_radius=24,
+                     font=("Inter", 14, "bold"), border_width=0,
+                     command=self.start_timer).pack(side="left", padx=8)
         
         ctk.CTkButton(btn_frame, text=self.t("pause"), width=110, height=48,
-                      fg_color="#f59e0b", text_color="#000000", corner_radius=24,
-                      font=("Arial", 14, "bold"), border_width=0,
-                      command=self.pause_timer).pack(side="left", padx=8)
+                     fg_color="#f59e0b", text_color="#000000", corner_radius=24,
+                     font=("Inter", 14, "bold"), border_width=0,
+                     command=self.pause_timer).pack(side="left", padx=8)
         
         ctk.CTkButton(btn_frame, text=self.t("finish"), width=110, height=48,
-                      fg_color=self.theme["danger"], text_color="white", corner_radius=24,
-                      font=("Arial", 14, "bold"), border_width=0,
-                      command=self.reset_timer).pack(side="left", padx=8)
-                      
+                     fg_color=self.theme["danger"], text_color="white", corner_radius=24,
+                     font=("Inter", 14, "bold"), border_width=0,
+                     command=self.reset_timer).pack(side="left", padx=8)
+                     
         ctk.CTkButton(btn_frame, text=self.t("save"), width=110, height=48,
-                      fg_color="#3b82f6", text_color="white", corner_radius=24,
-                      font=("Arial", 14, "bold"), border_width=0,
-                      command=self.save_timer_session).pack(side="left", padx=8)
-                      
+                     fg_color="#3b82f6", text_color="white", corner_radius=24,
+                     font=("Inter", 14, "bold"), border_width=0,
+                     command=self.save_timer_session).pack(side="left", padx=8)
+                     
         ctk.CTkButton(btn_frame, text=self.t("detach"), width=90, height=48,
-                      fg_color=self.theme["card"], text_color=self.theme["text_dim"], corner_radius=24,
-                      font=("Arial", 14, "bold"), border_width=0,
-                      command=self.open_mini_timer).pack(side="left", padx=8)
+                     fg_color=self.theme["card"], text_color=self.theme["text_dim"], corner_radius=24,
+                     font=("Inter", 14, "bold"), border_width=0,
+                     command=self.open_mini_timer).pack(side="left", padx=8)
 
     def add_category_dialog(self):
         dialog = ctk.CTkInputDialog(text=self.t("add_cat_prompt"), title=self.t("add_cat_title"))
@@ -636,28 +718,28 @@ class PersonalAssistantApp(ctk.CTk):
                                  corner_radius=12)
         main_frame.pack(fill="both", expand=True, padx=1, pady=1)
         
-        close_btn = ctk.CTkButton(main_frame, text="✕", width=28, height=28, fg_color="transparent", 
-                                  text_color=self.theme["danger"], hover_color=self.theme["bg"],
-                                  font=("Arial", 16), corner_radius=14,
-                                  command=self.close_mini_timer)
+        close_btn = ctk.CTkButton(main_frame, text="✕", width=28, height=28, fg_color=self.theme["card"], 
+                                 text_color=self.theme["danger"], hover_color=self.theme["bg"],
+                                 font=("SF Pro Display", 16), corner_radius=14,
+                                 command=self.close_mini_timer)
         close_btn.place(relx=0.97, rely=0.03, anchor="ne")
         
         self.mini_timer_label = ctk.CTkLabel(main_frame, text=self.format_timer_time(self.timer_seconds),
-                                            font=("Arial", 42, "bold"), text_color=self.theme["text"])
+                                            font=("SF Pro Display", 42, "bold"), text_color=self.theme["text"])
         self.mini_timer_label.pack(pady=(30, 8))
         
-        btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        btn_frame = ctk.CTkFrame(main_frame, fg_color=self.theme["card"])
         btn_frame.pack(pady=8)
         
         ctk.CTkButton(btn_frame, text="⏯", width=56, height=36, fg_color=self.theme["accent"], text_color=self.theme["bg"],
-                      font=("Arial", 18), corner_radius=10,
-                      command=self.toggle_timer_from_mini).pack(side="left", padx=6)
+                     font=("SF Pro Display", 18), corner_radius=10,
+                     command=self.toggle_timer_from_mini).pack(side="left", padx=6)
         ctk.CTkButton(btn_frame, text="💾", width=56, height=36, fg_color="#3b82f6", text_color="white",
-                      font=("Arial", 18), corner_radius=10,
-                      command=self.save_from_mini).pack(side="left", padx=6)
+                     font=("SF Pro Display", 18), corner_radius=10,
+                     command=self.save_from_mini).pack(side="left", padx=6)
         ctk.CTkButton(btn_frame, text="⏹", width=56, height=36, fg_color=self.theme["danger"], text_color="white",
-                      font=("Arial", 18), corner_radius=10,
-                      command=self.reset_timer).pack(side="left", padx=6)
+                     font=("SF Pro Display", 18), corner_radius=10,
+                     command=self.reset_timer).pack(side="left", padx=6)
 
     def start_move(self, event):
         self._drag_data["x"] = event.x
@@ -775,13 +857,13 @@ class PersonalAssistantApp(ctk.CTk):
         self.set_active_menu(self.btn_total)
         self.clear_view()
         
-        container = ctk.CTkFrame(self.view_frame, fg_color="transparent")
+        container = ctk.CTkFrame(self.view_frame, fg_color=self.theme["bg"])
         container.pack(fill="both", expand=True, padx=20, pady=20)
         
-        ctk.CTkLabel(container, text=self.t("total_time_header"), font=("Arial", 28, "bold"), 
+        ctk.CTkLabel(container, text=self.t("total_time_header"), font=("SF Pro Display", 28, "bold"), 
                      text_color=self.theme["text"]).pack(anchor="w", pady=(0, 25))
         
-        scroll = ctk.CTkScrollableFrame(container, fg_color="transparent")
+        scroll = ctk.CTkScrollableFrame(container, fg_color=self.theme["bg"])
         scroll.pack(fill="both", expand=True)
         
         grouped_data = {}
@@ -796,7 +878,7 @@ class PersonalAssistantApp(ctk.CTk):
         
         if not grouped_data:
             ctk.CTkLabel(scroll, text=self.t("no_timer_data"), text_color=self.theme["text_dim"],
-                         font=("Arial", 15)).pack(pady=60)
+                        font=("Inter", 15)).pack(pady=60)
             return
             
         sorted_data = sorted(grouped_data.items(), key=lambda x: x[1], reverse=True)
@@ -805,8 +887,8 @@ class PersonalAssistantApp(ctk.CTk):
             card = ctk.CTkFrame(scroll, fg_color=self.theme["card"], corner_radius=12)
             card.pack(fill="x", pady=6)
             
-            ctk.CTkLabel(card, text=name, font=("Arial", 16), text_color=self.theme["text"]).pack(side="left", padx=25, pady=18)
-            ctk.CTkLabel(card, text=self.format_timer_time(total_seconds), font=("Arial", 18, "bold"), 
+            ctk.CTkLabel(card, text=name, font=("Inter", 16), text_color=self.theme["text"]).pack(side="left", padx=25, pady=18)
+            ctk.CTkLabel(card, text=self.format_timer_time(total_seconds), font=("SF Pro Display", 18, "bold"), 
                          text_color=self.theme["accent"]).pack(side="right", padx=25)
 
     def parse_duration(self, task_str):
@@ -828,17 +910,16 @@ class PersonalAssistantApp(ctk.CTk):
         self.set_active_menu(self.btn_stats)
         self.clear_view()
 
-        scroll_container = ctk.CTkScrollableFrame(self.view_frame, fg_color="transparent")
+        scroll_container = ctk.CTkScrollableFrame(self.view_frame, fg_color=self.theme["bg"])
         scroll_container.pack(fill="both", expand=True)
         
-        # --- PASTA GRAFİK (Filtreli) ---
         pie_card = ctk.CTkFrame(scroll_container, fg_color=self.theme["card"], corner_radius=16)
         pie_card.pack(fill="x", pady=12, padx=12)
         
-        pie_header = ctk.CTkFrame(pie_card, fg_color="transparent")
+        pie_header = ctk.CTkFrame(pie_card, fg_color=self.theme["card"])
         pie_header.pack(fill="x", padx=25, pady=20)
         
-        ctk.CTkLabel(pie_header, text=self.t("pie_chart"), font=("Arial", 20, "bold"), 
+        ctk.CTkLabel(pie_header, text=self.t("pie_chart"), font=("SF Pro Display", 20, "bold"), 
                      text_color=self.theme["text"]).pack(side="left")
                      
         self.pie_period_var = ctk.StringVar(value=self.t("all_time"))
@@ -846,15 +927,14 @@ class PersonalAssistantApp(ctk.CTk):
                                          variable=self.pie_period_var, command=self.update_pie_chart,
                                          selected_color=self.theme["accent"], selected_hover_color=self.theme["accent"],
                                          unselected_color=self.theme["bg"], unselected_hover_color=self.theme["bg"],
-                                         font=("Arial", 13))
+                                         font=("Inter", 13))
         seg_btn.pack(side="right")
         
-        self.pie_canvas_frame = ctk.CTkFrame(pie_card, fg_color="transparent")
+        self.pie_canvas_frame = ctk.CTkFrame(pie_card, fg_color=self.theme["card"])
         self.pie_canvas_frame.pack(fill="both", expand=True, pady=(0, 15))
         
         self.update_pie_chart(self.t("all_time"))
 
-        # --- ISI HARİTASI ---
         self.heat_card = ctk.CTkFrame(scroll_container, fg_color=self.theme["card"], corner_radius=16)
         self.heat_card.pack(fill="x", pady=12, padx=12)
         self.draw_activity_heatmap(self.heat_card)
@@ -892,9 +972,9 @@ class PersonalAssistantApp(ctk.CTk):
         pending = total - done
         if total == 0:
             ctk.CTkLabel(parent, text=self.t("no_task"), text_color=self.theme["text_dim"],
-                         font=("Arial", 14)).pack(pady=30)
+                        font=("Inter", 14)).pack(pady=30)
             return
-        container = ctk.CTkFrame(parent, fg_color="transparent")
+        container = ctk.CTkFrame(parent, fg_color=self.theme["card"])
         container.pack(pady=15)
         size = 180
         canvas = tk.Canvas(container, width=size, height=size, bg=self.theme["card"], highlightthickness=0)
@@ -907,75 +987,190 @@ class PersonalAssistantApp(ctk.CTk):
         if pending > 0:
             canvas.create_arc(10, 10, size-10, size-10, start=angle_done, extent=angle_pending, 
                               fill=self.theme["bg"], outline="")
-        legend = ctk.CTkFrame(container, fg_color="transparent")
+        legend = ctk.CTkFrame(container, fg_color=self.theme["card"])
         legend.pack(side="left", padx=25)
         self.create_legend_item(legend, self.theme["accent"], f"{self.t('completed')}: {done} ({int(done/total*100)}%)")
         self.create_legend_item(legend, self.theme["bg"], f"{self.t('pending')}: {pending} ({int(pending/total*100)}%)")
 
     def create_legend_item(self, parent, color, text):
-        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row = ctk.CTkFrame(parent, fg_color=self.theme["card"])
         row.pack(anchor="w", pady=8)
         ctk.CTkFrame(row, width=18, height=18, fg_color=color, corner_radius=4).pack(side="left", padx=10)
-        ctk.CTkLabel(row, text=text, font=("Arial", 15), text_color=self.theme["text"]).pack(side="left")
+        ctk.CTkLabel(row, text=text, font=("Inter", 15), text_color=self.theme["text"]).pack(side="left")
 
     def draw_activity_heatmap(self, parent):
         for w in parent.winfo_children(): w.destroy()
-        ctk.CTkLabel(parent, text=self.t("heatmap"), font=("Arial", 20, "bold"), 
-                     text_color=self.theme["text"]).pack(pady=20)
-        header = ctk.CTkFrame(parent, fg_color="transparent")
-        header.pack(fill="x", padx=25, pady=(0, 15))
-        ctk.CTkButton(header, text="‹", width=32, height=32, fg_color="transparent",
-                      text_color=self.theme["text"], hover_color=self.theme["bg"],
-                      font=("Arial", 18),
-                      command=lambda: self.change_heatmap_month(-1)).pack(side="left")
+        
+        main_container = ctk.CTkFrame(parent, fg_color=self.theme["card"])
+        main_container.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        ctk.CTkLabel(main_container, text=self.t("heatmap"), font=("SF Pro Display", 20, "bold"), 
+                     text_color=self.theme["text"]).pack(anchor="w", pady=(0, 15))
+        
+        header = ctk.CTkFrame(main_container, fg_color=self.theme["card"])
+        header.pack(fill="x", pady=(0, 20))
+        
+        ctk.CTkButton(header, text="‹", width=32, height=32, fg_color=self.theme["card"],
+                     text_color=self.theme["text"], hover_color=self.theme["bg"],
+                     font=("SF Pro Display", 18),
+                     command=lambda: self.change_heatmap_month(-1)).pack(side="left")
+        
         months_list = self.t("months")
         month_name = f"{months_list[self.heatmap_date.month-1]} {self.heatmap_date.year}"
-        ctk.CTkLabel(header, text=month_name, font=("Arial", 15, "bold"), text_color=self.theme["text_dim"]).pack(side="left", expand=True)
-        ctk.CTkButton(header, text="›", width=32, height=32, fg_color="transparent",
-                      text_color=self.theme["text"], hover_color=self.theme["bg"],
-                      font=("Arial", 18),
-                      command=lambda: self.change_heatmap_month(1)).pack(side="right")
-        grid = ctk.CTkFrame(parent, fg_color="transparent")
-        grid.pack(pady=15)
+        ctk.CTkLabel(header, text=month_name, font=("Inter", 15, "bold"), 
+                    text_color=self.theme["text_dim"]).pack(side="left", expand=True)
+        
+        ctk.CTkButton(header, text="›", width=32, height=32, fg_color=self.theme["card"],
+                     text_color=self.theme["text"], hover_color=self.theme["bg"],
+                     font=("SF Pro Display", 18),
+                     command=lambda: self.change_heatmap_month(1)).pack(side="right")
+        
+        split_container = ctk.CTkFrame(main_container, fg_color=self.theme["card"])
+        split_container.pack(fill="both", expand=True)
+        
+        grid_container = ctk.CTkFrame(split_container, fg_color=self.theme["card"])
+        grid_container.pack(side="left", fill="both", expand=True)
+        
+        grid = ctk.CTkFrame(grid_container, fg_color=self.theme["card"])
+        grid.pack(anchor="w")
+        
+        self.detail_panel = ctk.CTkFrame(split_container, width=300, fg_color=self.theme["bg"], 
+                                        corner_radius=12)
+        self.detail_panel.pack(side="right", fill="y", padx=(20, 0))
+        self.detail_panel.pack_propagate(False)
+        
+        self.show_heatmap_placeholder()
+        
         data_map = {}
         for t in self.tasks:
             d = t["date"]
-            if d not in data_map: data_map[d] = []
+            if d not in data_map: 
+                data_map[d] = []
             data_map[d].append(t)
+        
         days_list = self.t("days")
         for i, d_name in enumerate(days_list):
-            ctk.CTkLabel(grid, text=d_name, text_color=self.theme["text_dim"], font=("Arial", 11, "bold")).grid(row=0, column=i, pady=(0, 8))
+            ctk.CTkLabel(grid, text=d_name, text_color=self.theme["text_dim"], 
+                        font=("Inter", 11, "bold")).grid(row=0, column=i, pady=(0, 8))
+        
         month_days = calendar.monthcalendar(self.heatmap_date.year, self.heatmap_date.month)
+        
         for r, week in enumerate(month_days):
             for c, day in enumerate(week):
-                if day == 0: continue
+                if day == 0: 
+                    continue
+                    
                 date_str = f"{self.heatmap_date.year}-{self.heatmap_date.month:02d}-{day:02d}"
                 tasks_list = data_map.get(date_str, [])
                 completed_count = len([t for t in tasks_list if t["done"]])
+                
                 color = self.theme["bg"]
-                text_color = self.theme["text"]
+                text_color = self.theme["text_dim"]
+                hover_color = self.theme["sidebar"]
+                
                 if completed_count >= 1: 
-                    color = self.adjust_color(self.theme["accent"], 0.5)
-                    text_color = self.theme["bg"]
+                    color = self.adjust_color(self.theme["accent"], 0.4)
+                    text_color = self.theme["text"]
+                    hover_color = self.adjust_color(self.theme["accent"], 0.6)
                 if completed_count >= 3: 
                     color = self.theme["accent"]
                     text_color = self.theme["bg"]
-                box = ctk.CTkFrame(grid, width=40, height=40, fg_color=color, corner_radius=8)
-                box.grid(row=r+1, column=c, padx=4, pady=4)
-                ctk.CTkLabel(box, text=str(day), text_color=text_color, font=("Arial", 13, "bold")).place(relx=0.5, rely=0.5, anchor="center")
-                tooltip_text = f"{date_str}\n"
-                if tasks_list:
-                    for t in tasks_list:
-                        status = "✓" if t["done"] else "○"
-                        tooltip_text += f"{status} {t['task']}\n"
-                else:
-                    tooltip_text += self.t("no_task")
-                ToolTip(box, tooltip_text)
+                    hover_color = self.theme["accent"]
+                
+                btn = ctk.CTkButton(grid, text=str(day), width=40, height=40, 
+                                   fg_color=color, corner_radius=8,
+                                   text_color=text_color, 
+                                   hover_color=hover_color,
+                                   font=("SF Pro Display", 13, "bold"),
+                                   command=lambda ds=date_str, tl=tasks_list: self.show_heatmap_details(ds, tl))
+                btn.grid(row=r+1, column=c, padx=4, pady=4)
+
+    def show_heatmap_placeholder(self):
+        for w in self.detail_panel.winfo_children(): 
+            w.destroy()
+        
+        placeholder_frame = ctk.CTkFrame(self.detail_panel, fg_color=self.theme["bg"])
+        placeholder_frame.pack(expand=True)
+        
+        ctk.CTkLabel(placeholder_frame, text="📅", font=("SF Pro Display", 48)).pack(pady=(0, 10))
+        ctk.CTkLabel(placeholder_frame, text=self.t("select_day"), 
+                    font=("Inter", 14), text_color=self.theme["text_dim"]).pack()
+
+    def show_heatmap_details(self, date_str, tasks_list):
+        for w in self.detail_panel.winfo_children(): 
+            w.destroy()
+        
+        self.heatmap_selected_date = date_str
+        
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+            date_formatted = dt.strftime("%d %B %Y")
+            if self.current_lang_code == "TR":
+                months_tr = self.t("months")
+                date_formatted = f"{dt.day} {months_tr[dt.month-1]} {dt.year}"
+        except:
+            date_formatted = date_str
+        
+        header_frame = ctk.CTkFrame(self.detail_panel, fg_color=self.theme["bg"])
+        header_frame.pack(fill="x", padx=20, pady=(20, 15))
+        
+        ctk.CTkLabel(header_frame, text=date_formatted, 
+                    font=("SF Pro Display", 16, "bold"), 
+                    text_color=self.theme["accent"]).pack(anchor="w")
+        
+        completed = len([t for t in tasks_list if t["done"]])
+        total = len(tasks_list)
+        
+        stats_text = f"{completed}/{total} {self.t('completed').lower()}"
+        ctk.CTkLabel(header_frame, text=stats_text, 
+                    font=("Inter", 12), 
+                    text_color=self.theme["text_dim"]).pack(anchor="w", pady=(5, 0))
+        
+        ctk.CTkFrame(self.detail_panel, height=1, fg_color=self.theme["sidebar"]).pack(fill="x", padx=20, pady=10)
+        
+        if not tasks_list:
+            no_task_frame = ctk.CTkFrame(self.detail_panel, fg_color=self.theme["bg"])
+            no_task_frame.pack(expand=True)
+            ctk.CTkLabel(no_task_frame, text=self.t("no_task"), 
+                        font=("Inter", 13), 
+                        text_color=self.theme["text_dim"]).pack()
+        else:
+            scroll_frame = ctk.CTkScrollableFrame(self.detail_panel, fg_color=self.theme["bg"])
+            scroll_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
+            
+            for task in tasks_list:
+                task_card = ctk.CTkFrame(scroll_frame, fg_color=self.theme["card"], 
+                                        corner_radius=8)
+                task_card.pack(fill="x", pady=4)
+                
+                task_inner = ctk.CTkFrame(task_card, fg_color=self.theme["card"])
+                task_inner.pack(fill="x", padx=12, pady=10)
+                
+                done = task["done"]
+                checkbox_color = self.theme["accent"] if done else self.theme["card"]
+                checkbox_text = "✓" if done else ""
+                
+                chk = ctk.CTkLabel(task_inner, text=checkbox_text, width=20, height=20,
+                                  fg_color=checkbox_color, corner_radius=10,
+                                  text_color=self.theme["bg"] if done else self.theme["text_dim"],
+                                  font=("SF Pro Display", 12, "bold"))
+                chk.pack(side="left", padx=(0, 10))
+                
+                text_color = self.theme["text_dim"] if done else self.theme["text"]
+                task_text = task["task"]
+                
+                lbl = ctk.CTkLabel(task_inner, text=task_text, 
+                                  font=("Inter", 12), 
+                                  text_color=text_color,
+                                  anchor="w", justify="left")
+                lbl.pack(side="left", fill="x", expand=True)
 
     def change_heatmap_month(self, d):
         m, y = self.heatmap_date.month + d, self.heatmap_date.year
-        if m > 12: m, y = 1, y + 1
-        elif m < 1: m, y = 12, y - 1
+        if m > 12: 
+            m, y = 1, y + 1
+        elif m < 1: 
+            m, y = 12, y - 1
         self.heatmap_date = self.heatmap_date.replace(year=y, month=m, day=1)
         self.draw_activity_heatmap(self.heat_card)
 
@@ -998,36 +1193,36 @@ class PersonalAssistantApp(ctk.CTk):
         win.focus_force()
         win.lift()
         win.attributes('-topmost', True)
-        container = ctk.CTkFrame(win, fg_color="transparent")
+        container = ctk.CTkFrame(win, fg_color=self.theme["bg"])
         container.pack(fill="both", expand=True, padx=35, pady=35)
-        ctk.CTkLabel(container, text=self.t("settings"), font=("Arial", 26, "bold"), 
+        ctk.CTkLabel(container, text=self.t("settings"), font=("SF Pro Display", 26, "bold"), 
                      text_color=self.theme["text"]).pack(pady=(0, 30))
-        ctk.CTkLabel(container, text=self.t("theme"), font=("Arial", 15, "bold"), 
+        ctk.CTkLabel(container, text=self.t("theme"), font=("Inter", 15, "bold"), 
                      text_color=self.theme["accent"]).pack(anchor="w", pady=(15, 8))
         theme_var = ctk.StringVar(value=self.current_theme_name)
         theme_menu = ctk.CTkOptionMenu(container, variable=theme_var, values=list(THEMES.keys()),
                                       fg_color=self.theme["card"], button_color=self.theme["accent"],
-                                      text_color=self.theme["text"], font=("Arial", 14),
-                                      dropdown_font=("Arial", 13), corner_radius=12, height=48)
+                                      text_color=self.theme["text"], font=("Inter", 14),
+                                      dropdown_font=("Inter", 13), corner_radius=12, height=48)
         theme_menu.pack(fill="x")
-        ctk.CTkLabel(container, text=self.t("language"), font=("Arial", 15, "bold"), 
+        ctk.CTkLabel(container, text=self.t("language"), font=("Inter", 15, "bold"), 
                      text_color=self.theme["accent"]).pack(anchor="w", pady=(25, 8))
         lang_var = ctk.StringVar(value=self.current_lang_code)
-        lang_frame = ctk.CTkFrame(container, fg_color="transparent")
+        lang_frame = ctk.CTkFrame(container, fg_color=self.theme["bg"])
         lang_frame.pack(fill="x")
         ctk.CTkRadioButton(lang_frame, text="Türkçe", variable=lang_var, value="TR", 
                           text_color=self.theme["text"], fg_color=self.theme["accent"],
-                          font=("Arial", 14)).pack(side="left", padx=12)
+                          font=("Inter", 14)).pack(side="left", padx=12)
         ctk.CTkRadioButton(lang_frame, text="English", variable=lang_var, value="EN", 
                           text_color=self.theme["text"], fg_color=self.theme["accent"],
-                          font=("Arial", 14)).pack(side="left", padx=12)
-        ctk.CTkLabel(container, text=self.t("data_mgmt"), font=("Arial", 15, "bold"), 
+                          font=("Inter", 14)).pack(side="left", padx=12)
+        ctk.CTkLabel(container, text=self.t("data_mgmt"), font=("Inter", 15, "bold"), 
                      text_color=self.theme["accent"]).pack(anchor="w", pady=(35, 8))
         ctk.CTkButton(container, text=self.t("delete_all"), fg_color=self.theme["danger"], hover_color="#cc0000",
-                     font=("Arial", 14, "bold"), height=48, corner_radius=12,
+                     font=("Inter", 14, "bold"), height=48, corner_radius=12,
                      command=lambda: self.delete_all_data(win)).pack(fill="x")
         ctk.CTkButton(container, text=self.t("apply"), fg_color=self.theme["accent"], text_color=self.theme["bg"], 
-                     height=52, font=("Arial", 15, "bold"), corner_radius=12,
+                     height=52, font=("Inter", 15, "bold"), corner_radius=12,
                      command=lambda: self.apply_settings(win, theme_var.get(), lang_var.get())).pack(side="bottom", fill="x", pady=(20, 0))
 
     def apply_settings(self, window, theme, lang):
@@ -1054,26 +1249,26 @@ class PersonalAssistantApp(ctk.CTk):
         window.attributes('-topmost', True)
 
     def load_config(self):
-        defaults = {"theme": "Midnight", "language": "TR"}
         try:
             with open("config.json", "r", encoding="utf-8") as f: 
-                data = json.load(f)
-                if data.get("theme") not in THEMES:
-                    data["theme"] = "Midnight"
-                return data
+                return json.load(f)
         except: 
-            return defaults
+            return {"theme": "Midnight", "language": "TR"}
 
     def save_config(self):
-        with open("config.json", "w", encoding="utf-8") as f: json.dump(self.config, f, indent=2)
+        with open("config.json", "w", encoding="utf-8") as f: 
+            json.dump(self.config, f, indent=2)
 
     def load_data(self, filename):
         try:
-            with open(filename, "r", encoding="utf-8") as f: return json.load(f)
-        except: return []
+            with open(filename, "r", encoding="utf-8") as f: 
+                return json.load(f)
+        except: 
+            return []
 
     def save_data(self, filename, data):
-        with open(filename, "w", encoding="utf-8") as f: json.dump(data, f, indent=2, ensure_ascii=False)
+        with open(filename, "w", encoding="utf-8") as f: 
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
 if __name__ == "__main__":
     app = PersonalAssistantApp()
